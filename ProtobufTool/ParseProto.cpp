@@ -1,16 +1,7 @@
 #include "stdafx.h"
 #include "ParseProto.h"
-
-#ifdef _DEBUG
-#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Debug\\libprotobufd.lib")
-#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Debug\\libprotobuf-lited.lib")
-#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Debug\\libprotocd.lib")
-#else
-#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Release\\libprotobuf.lib")
-#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Release\\libprotobuf-lite.lib")
-#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Release\\libprotoc.lib")
-#endif
-
+#include<sstream>
+#include<CodedConvert.h>
 
 ParseProto::ParseProto()
 {
@@ -31,10 +22,13 @@ bool ParseProto::LoadProtoFromFile(const std::string& proto_filename)
 	}
 	std::string path = proto_filename.substr(0,ipos);
 	std::string file = proto_filename.substr(ipos+1);
+	SurrealConvert::CodedConvert mCodedConvert;
+	path = mCodedConvert.AsciiToUtf8(path.c_str());
 	google::protobuf::compiler::DiskSourceTree sourceTree;
 	sourceTree.MapPath("", path);
 	google::protobuf::compiler::Importer mImport((google::protobuf::compiler::SourceTree*)(&sourceTree), NULL);
-	const FileDescriptor* pFileDescriptor = mImport.Import(file);
+	const google::protobuf::FileDescriptor* pFileDescriptor = mImport.Import(file);
+	if (pFileDescriptor == NULL) return false;
 	Clear();
 	for (int i = 0; i < pFileDescriptor->message_type_count(); i++)
 	{
@@ -49,8 +43,8 @@ std::vector<std::string>& ParseProto::GetMessageList()
 	return messagelist;
 }
 
-std::string ParseProto::PrintDataFile(const std::string& message_name,const unsigned char *buffer,const unsigned int size) {
-	std::string strdebug = "";
+void ParseProto::PrintDataFile(const std::string& message_name,const unsigned char *buffer,const unsigned int size, std::map<std::string, std::string> &mapresult)
+{
 	if (size) {
 		int ipos = strProtoFile.find_last_of('\\');
 		if (ipos == -1)
@@ -59,33 +53,190 @@ std::string ParseProto::PrintDataFile(const std::string& message_name,const unsi
 		}
 		std::string path = strProtoFile.substr(0, ipos);
 		std::string file = strProtoFile.substr(ipos + 1);
+		SurrealConvert::CodedConvert mCodedConvert;
+		path=mCodedConvert.AsciiToUtf8(path.c_str());
 		google::protobuf::compiler::DiskSourceTree sourceTree;
 		sourceTree.MapPath("", path);
 		google::protobuf::compiler::Importer mImport((google::protobuf::compiler::SourceTree*)(&sourceTree), NULL);
-		const FileDescriptor* pFileDescriptor = mImport.Import(file);
+		const google::protobuf::FileDescriptor* pFileDescriptor = mImport.Import(file);
 		if (pFileDescriptor)
 		{
 			const google::protobuf::Descriptor *p=mImport.pool()->FindMessageTypeByName(message_name);
 			google::protobuf::DynamicMessageFactory factory;
 			google::protobuf::Message *msg = factory.GetPrototype(p)->New();
 			msg->ParseFromArray(buffer, size);
-			strdebug = msg->DebugString();
+			msg->DiscardUnknownFields();
+			std::string strdebug = msg->Utf8DebugString();
+			mapresult.insert(std::pair<std::string, std::string>("DebugString", strdebug));
+			TraversalFieldDescript(*msg, mapresult);
 			delete msg;
 
 		}
 	}
-	return strdebug;
+}
+
+bool ParseProto::TraversalFieldDescript(const google::protobuf::Message& message, std::map<std::string,std::string>& result)
+{
+	const google::protobuf::Descriptor* descriptor = message.GetDescriptor();
+	const google::protobuf::Reflection* reflection = message.GetReflection();
+	if (NULL == descriptor) {
+		return false;
+	}
+	//遍历所有的字段，包括空字段
+	//for (int i = 0; i < descriptor->field_count(); i++)
+	//{
+	//	DoTraversalFieldDescript(message, descriptor->field(i), reflection,result);
+	//}
+	//只遍历非空字段
+	std::vector<const google::protobuf::FieldDescriptor*> fields;
+	reflection->ListFields(message, &fields);
+	for (int i = 0; i < fields.size(); i++)
+	{
+		DoTraversalFieldDescript(message,fields[i], reflection, result);
+	}
+	return true;
+}
+
+void ParseProto::DoTraversalFieldDescript(const google::protobuf::Message& message,const google::protobuf::FieldDescriptor* field, const google::protobuf::Reflection * reflection, std::map<std::string, std::string>& result)
+{
+	if (field == NULL) return;
+	if (field->label() == google::protobuf::FieldDescriptor::LABEL_REPEATED)
+	{
+		//repeated message
+		for (int i = 0; i < field->message_type()->field_count(); i++)
+		{
+			const google::protobuf::Message &m = reflection->GetRepeatedMessage(message, field, i);
+			const google::protobuf::Reflection * ref = m.GetReflection();
+			//const google::protobuf::FieldDescriptor *f = m.GetDescriptor();
+			//DoTraversalFieldDescript(m, field->message_type()->field(i), ref);
+			result.insert(std::pair<std::string, std::string>("repeated message", "not support"));
+		}
+		return;
+	}
+	switch (field->type())
+	{
+		case google::protobuf::FieldDescriptor::TYPE_FIXED64:
+		case google::protobuf::FieldDescriptor::TYPE_INT64:
+		{
+			long long l = reflection->GetInt64(message, field);
+			std::ostringstream stream;
+			stream << l;
+			result.insert(std::pair<std::string, std::string>(field->full_name(), stream.str()));
+			break;
+		}
+
+		case google::protobuf::FieldDescriptor::TYPE_UINT64:
+		{
+			unsigned long long l1 = reflection->GetUInt64(message, field);
+			std::ostringstream stream;
+			stream << l1;
+			result.insert(std::pair<std::string, std::string>(field->full_name(), stream.str()));
+			break;
+		}
+
+
+		case google::protobuf::FieldDescriptor::TYPE_FIXED32:
+		case google::protobuf::FieldDescriptor::TYPE_INT32:
+		{
+			int i = reflection->GetInt32(message, field);
+			std::ostringstream stream;
+			stream << i;
+			result.insert(std::pair<std::string, std::string>(field->full_name(), stream.str()));
+			break;
+		}
+		case google::protobuf::FieldDescriptor::TYPE_UINT32:
+		{
+			unsigned int i1 = reflection->GetUInt32(message, field);
+			std::ostringstream stream;
+			stream << i1;
+			result.insert(std::pair<std::string, std::string>(field->full_name(), stream.str()));
+			break;
+		}
+
+		case google::protobuf::FieldDescriptor::TYPE_STRING:
+		{
+			std::string s = reflection->GetString(message, field);
+			result.insert(std::pair<std::string, std::string>(field->full_name(), s));
+			break;
+		}
+
+		case google::protobuf::FieldDescriptor::TYPE_DOUBLE:
+		{
+			double d = reflection->GetDouble(message, field);
+			std::ostringstream stream;
+			stream << d;
+			result.insert(std::pair<std::string, std::string>(field->full_name(), stream.str()));
+			break;
+		}
+		case google::protobuf::FieldDescriptor::TYPE_FLOAT:
+		{
+			float f = reflection->GetFloat(message, field);
+			std::ostringstream stream;
+			stream << f;
+			result.insert(std::pair<std::string, std::string>(field->full_name(), stream.str()));
+			break;
+		}
+		case google::protobuf::FieldDescriptor::TYPE_BOOL:
+		{
+			bool b = reflection->GetBool(message, field);
+			std::ostringstream stream;
+			stream << b;
+			result.insert(std::pair<std::string, std::string>(field->full_name(), stream.str()));
+			break;
+		}
+		case google::protobuf::FieldDescriptor::TYPE_MESSAGE:
+		{
+			//嵌套
+			const google::protobuf::Message& current_msg = reflection->GetMessage(message, field);
+			//std::string sd= current_msg.SerializeAsString();
+			const google::protobuf::Descriptor* descriptor_temp = current_msg.GetDescriptor();
+			const google::protobuf::Reflection* reflection_temp = current_msg.GetReflection();
+			if (NULL == descriptor_temp)
+			{
+				break;
+			}
+			//遍历所有字段，包含空字段
+			//for (int i = 0; i < descriptor_temp->field_count(); i++)
+			//{
+			//	DoTraversalFieldDescript(current_msg, descriptor_temp->field(i), reflection_temp, result);
+			//}
+			//只遍历非空字段
+			std::vector<const google::protobuf::FieldDescriptor*> fields;
+			reflection_temp->ListFields(current_msg, &fields);
+			for (int i = 0; i < fields.size(); i++)
+			{
+				DoTraversalFieldDescript(current_msg, fields[i], reflection_temp, result);
+			}
+		}break;
+		case google::protobuf::FieldDescriptor::TYPE_GROUP:
+		{
+			result.insert(std::pair<std::string, std::string>(field->full_name(), "not support type"));
+		}break;
+		case google::protobuf::FieldDescriptor::TYPE_BYTES:
+		{
+			std::string s = reflection->GetString(message, field);
+			result.insert(std::pair<std::string, std::string>(field->full_name(), s));
+		}break;
+		case google::protobuf::FieldDescriptor::TYPE_ENUM:
+		{
+			result.insert(std::pair<std::string, std::string>(field->full_name(), "not support type"));
+		}break;
+		default:
+		{
+			result.insert(std::pair<std::string, std::string>(field->full_name(), "not support type"));
+		}
+	}
 }
 
 std::string ParseProto::PrintDebugString(const unsigned char *buffer, const unsigned int size)
 {
 	std::string ret;
-	google::protobuf::OneofDescriptorProto proto;
+	//google::protobuf::OneofDescriptorProto proto;
+	//proto.ParseFromArray(buffer, size);
+	//ret = proto.DebugString();
+	google::protobuf::DescriptorProto proto;
 	proto.ParseFromArray(buffer, size);
-	ret = proto.DebugString();
-	/*google::protobuf::DescriptorProto proto;
-	proto.ParseFromArray(buffer, size);
-	ret=proto.Utf8DebugString();*/
+	ret=proto.Utf8DebugString();
 	//ret = proto.DebugString();
 	return ret;
 }

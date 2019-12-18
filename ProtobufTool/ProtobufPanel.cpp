@@ -6,6 +6,7 @@
 #include "ProtobufPanel.h"
 #include "afxdialogex.h"
 #include<google\protobuf\io\coded_stream.h>
+#include<CodedConvert.h>
 
 
 // CProtobufPanel 对话框
@@ -98,8 +99,10 @@ void CProtobufPanel::OnBnClickedButton1()
 			mMessageList.GetLBText(mMessageList.GetCurSel(), strMessage);
 			std::wstring wstr = strMessage.GetString();
 			std::string str = WStringToString(wstr);
-			std::string strResult = mParseProto.PrintDataFile(str.c_str(), data, len2);
+			std::map<std::string,std::string> mapresult;
+			mParseProto.PrintDataFile(str.c_str(), data, len2, mapresult);
 			free(data);
+			std::string strResult = mapresult["DebugString"];
 			if (strResult == "")
 			{
 				mEdtResult = "解析出错...";
@@ -154,57 +157,18 @@ void CProtobufPanel::OnBnClickedButton2()
 //解码
 void CProtobufPanel::OnBnClickedButton3()
 {
-	//0:Varint(int32, int64, uint32, uint64, sint32, sint64, bool, enum)
-	//1:64-bit(fixed64, sfixed64, double)
-	//2:Length-delimited(string, bytes, embedded messages, packed repeated fields)
-	//3:Start group(groups (deprecated))
-	//4:End group(groups (deprecated))
-	//5:32-bit(fixed32, sfixed32, float)
-	//unsigned int len = HexEditControl::GetDataLength(pHexControl2);
-	//if (len != 0)
-	//{
-	//	unsigned char *data = (unsigned char*)malloc(len+1);
-	//	data[0] = 0x08;
-	//	HexEditControl::GetData(pHexControl2, data+1, len);
-
-	//	TestMsg::TestMsg m;
-	//	m.ParseFromArray(data, len+1);
-	//	free(data);
-	//	int i=m.unknown_fields().field_count();
-	//	if (m.unknown_fields().field_count() >= 1)
-	//	{
-	//		google::protobuf::UnknownField fild = m.unknown_fields().field(0);
-	//		switch (fild.type())
-	//		{
-	//		case google::protobuf::UnknownField::TYPE_VARINT:
-	//		{
-	//			__int64 value = fild.varint();
-	//			mValue.Format(L"%lu", value);
-	//		}break;
-	//		case google::protobuf::UnknownField::TYPE_FIXED32:
-	//		{
-	//			__int32 value = fild.fixed32();
-	//			mValue.Format(L"%lu", value);
-	//		}break;
-	//		case google::protobuf::UnknownField::TYPE_FIXED64:
-	//		{
-	//			__int64 value = fild.fixed64();
-	//			mValue.Format(L"%lu", value);
-	//		}break;
-	//		case google::protobuf::UnknownField::TYPE_LENGTH_DELIMITED:
-	//		{
-
-	//		}break;
-	//		case google::protobuf::UnknownField::TYPE_GROUP:
-	//		{
-
-	//		}break;
-	//		}
-	//		
-	//		UpdateData(FALSE);
-	//	}
-	//}
-
+	unsigned int len = pHexControl2.GetDataLen();
+	if (len != 0)
+	{
+		unsigned char *data = (unsigned char*)malloc(len + 1);
+		memset(data, 0, len + 1);
+		pHexControl2.GetData(data, len);
+		google::protobuf::io::CodedInputStream stream(data, len);
+		google::protobuf::uint64 value;
+		stream.ReadVarint64(&value);
+		mValue.Format(L"%llu", value);
+		UpdateData(FALSE);
+	}
 }
 
 //加载proto文件
@@ -234,13 +198,13 @@ void CProtobufPanel::OnBnClickedButton4()
 	unsigned int len1 = mProtoFile.GetLength();//proto文件路径长度
 	if(len1)
 	{
-		std::wstring wstr = mProtoFile.GetString();
-		std::string str = WStringToString(wstr);
+		SurrealConvert::CodedConvert mCode;
+		std::string str=mCode.UnicodeToAscii(mProtoFile.GetString());
 		mParseProto.LoadProtoFromFile(str);
 		std::vector<std::string> Messages = mParseProto.GetMessageList();
 		for (int i = 0; i < Messages.size(); i++)
 		{
-			wstr = StringToWString(Messages[i]);
+			std::wstring wstr = StringToWString(Messages[i]);
 			mMessageList.AddString(wstr.c_str());
 		}
 		mMessageList.SetCurSel(0);

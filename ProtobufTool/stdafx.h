@@ -49,3 +49,24 @@
 #include <afxcontrolbars.h>
 
 #include"resource.h"
+
+
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/dynamic_message.h>
+#include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <google/protobuf/io/tokenizer.h>
+#include <google/protobuf/compiler/parser.h>
+#include<google/protobuf/compiler/importer.h>
+#include<fstream>
+#include<string>
+//using namespace google::protobuf;
+
+#ifdef _DEBUG
+#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Debug\\libprotobufd.lib")
+#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Debug\\libprotobuf-lited.lib")
+#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Debug\\libprotocd.lib")
+#else
+#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Release\\libprotobuf.lib")
+#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Release\\libprotobuf-lite.lib")
+#pragma comment(lib,"..\\proto_3_9_0_vs2015_LIB\\Release\\libprotoc.lib")
+#endif
