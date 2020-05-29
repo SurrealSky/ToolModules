@@ -2,6 +2,7 @@
 #include "ParseProto.h"
 #include<sstream>
 #include<CodedConvert.h>
+#include"test.pb.h"
 
 ParseProto::ParseProto()
 {
@@ -234,9 +235,12 @@ std::string ParseProto::PrintDebugString(const unsigned char *buffer, const unsi
 	//google::protobuf::OneofDescriptorProto proto;
 	//proto.ParseFromArray(buffer, size);
 	//ret = proto.DebugString();
-	google::protobuf::DescriptorProto proto;
-	proto.ParseFromArray(buffer, size);
-	ret=proto.Utf8DebugString();
+	//google::protobuf::DescriptorProto proto;
+	//proto.ParseFromArray(buffer, size);
+	//ret=proto.Utf8DebugString();
 	//ret = proto.DebugString();
+	test::test testmsg;
+	testmsg.ParseFromArray(buffer, size);
+	ret = testmsg.Utf8DebugString();
 	return ret;
 }
