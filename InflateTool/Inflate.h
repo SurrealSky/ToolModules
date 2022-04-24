@@ -17,7 +17,7 @@ private:
 	};
 	int zcompress(Bytef *data, uLong ndata, Bytef *zdata, uLong *nzdata);
 	int gzcompress(Bytef *data, uLong ndata, Bytef *zdata, uLong *nzdata);
-	int zdecompress(Byte *zdata, uLong nzdata, Byte *data, uLong *ndata);
+	int zdecompress(Byte *zdata, uLong nzdata, Byte **data, uLong *ndata);
 	int httpgzdecompress(Byte *zdata, uLong nzdata, Byte *data, uLong *ndata);
 	int gzdecompress(Byte *zdata, uLong nzdata, Byte *data, uLong *ndata);
 	//bool LzmaCompress(const char*scrfilename, const char*desfilename);
@@ -35,7 +35,7 @@ public:
 		odata = (Bytef*)malloc(dstLen);
 		memset(odata, 0, dstLen);
 		nodata = dstLen;
-		return zdecompress(zdata, nzdata, odata, &nodata);
+		return zdecompress(zdata, nzdata, &odata, &nodata);
 	};
 
 	int gzcompress(Bytef *data, uLong ndata){ 

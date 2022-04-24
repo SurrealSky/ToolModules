@@ -24,6 +24,7 @@ CInflate::~CInflate()
 	}
 }
 
+/*zlib compress data*/
 int CInflate::zcompress(Bytef *data, uLong ndata, Bytef *zdata, uLong *nzdata)
 {
 	z_stream c_stream;
@@ -53,6 +54,50 @@ int CInflate::zcompress(Bytef *data, uLong ndata, Bytef *zdata, uLong *nzdata)
 	}
 	return -1;
 }
+
+/*zlib Uncompress data */
+int CInflate::zdecompress(Byte* zdata, uLong nzdata, Byte** data, uLong *ndata)
+{
+	const int CHUNK = 1024;
+	int ret;
+	unsigned have;
+	z_stream strm;
+	unsigned char out[CHUNK];
+	int totalsize = 0;
+
+	/* allocate inflate state */
+	strm.zalloc = Z_NULL;
+	strm.zfree = Z_NULL;
+	strm.opaque = Z_NULL;
+	strm.avail_in = 0;
+	strm.next_in = Z_NULL;
+	if (inflateInit(&strm) != Z_OK) return -1;
+
+	strm.avail_in = nzdata;
+	strm.next_in = zdata;
+	do {
+		strm.avail_out = CHUNK;
+		strm.next_out = out;
+		ret = inflate(&strm, Z_NO_FLUSH);
+		assert(ret != Z_STREAM_ERROR); /* state not clobbered */
+		switch (ret) {
+		case Z_NEED_DICT:
+			ret = Z_DATA_ERROR; /* and fall through */
+		case Z_DATA_ERROR:
+		case Z_MEM_ERROR:
+			inflateEnd(&strm);
+			return ret;
+		}
+		have = CHUNK - strm.avail_out;
+		totalsize += have;
+		*data = (Byte*)realloc(*data, totalsize);
+		memcpy(*data + totalsize - have, out, have);
+	} while (strm.avail_out == 0);
+	if (inflateEnd(&strm) != Z_OK) return -1;
+	*ndata = strm.total_out;
+	return 0;
+}
+
 /* Compress gzip data */
 int CInflate::gzcompress(Bytef *data, uLong ndata, Bytef *zdata, uLong *nzdata)
 {
@@ -84,27 +129,7 @@ int CInflate::gzcompress(Bytef *data, uLong ndata, Bytef *zdata, uLong *nzdata)
 	}
 	return -1;
 }
-/* Uncompress data */
-int CInflate::zdecompress(Byte *zdata, uLong nzdata, Byte *data, uLong *ndata)
-{
-	int err = 0;
-	z_stream d_stream; /* decompression stream */
-	d_stream.zalloc = (alloc_func)0;
-	d_stream.zfree = (free_func)0;
-	d_stream.opaque = (voidpf)0;
-	d_stream.next_in = zdata;
-	d_stream.avail_in = 0;
-	d_stream.next_out = data;
-	if (inflateInit(&d_stream) != Z_OK) return -1;
-	while (d_stream.total_out < *ndata && d_stream.total_in < nzdata) {
-		d_stream.avail_in = d_stream.avail_out = 1; /* force small buffers */
-		if ((err = inflate(&d_stream, Z_NO_FLUSH)) == Z_STREAM_END) break;
-		if (err != Z_OK) return -1;
-	}
-	if (inflateEnd(&d_stream) != Z_OK) return -1;
-	*ndata = d_stream.total_out;
-	return 0;
-}
+
 /* HTTP gzip decompress */
 int CInflate::httpgzdecompress(Byte *zdata, uLong nzdata, Byte *data, uLong *ndata)
 {
@@ -220,7 +245,6 @@ int CInflate::lzmauncompress(Byte *zdata, uLong nzdata, uLong dstLen)
 	nzdata -= 13;
 	return LzmaUncompress(odata, &savoutsize, zdata + 13, (size_t*)&nzdata, outProps, outPropsSize);
 }
-
 
 bool LzmaCompress(const char*scrfilename, const char*desfilename){
 
